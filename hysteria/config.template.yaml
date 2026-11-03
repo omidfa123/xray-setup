@@ -1,0 +1,38 @@
+listen: :8444
+
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
+
+auth:
+  type: password
+  password: ${HY2_PASSWORD}
+
+obfs:
+  type: salamander
+  salamander:
+    password: ${HY2_OBFS_PASSWORD}
+
+trafficStats:
+  listen: 127.0.0.1:10086
+  secret: ${HY2_PASSWORD}
+
+outbounds:
+  - name: direct
+    type: direct
+    direct:
+      mode: 4
+
+quic:
+  initStreamReceiveWindow: 16777216
+  maxStreamReceiveWindow: 16777216
+  initConnReceiveWindow: 33554432
+  maxConnReceiveWindow: 33554432
+  maxIdleTimeout: 30s
+  keepAlivePeriod: 10s
+
+masquerade:
+  type: string
+  string:
+    content: "404 page not found"
+    statusCode: 404
