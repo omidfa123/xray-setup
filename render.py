@@ -101,6 +101,9 @@ rules = [
 ]
 for email, _, target, _ in users:
     if email in ("psiphon", "lantern"):  # their local SOCKS proxies carry TCP only
+        # Apps (e.g. V2BOX) send DNS over UDP through the tunnel: answer it from this server,
+        # block other UDP so QUIC falls back to TCP.
+        rules.append({"user": [email], "network": "udp", "port": "53", "outboundTag": "direct"})
         rules.append({"user": [email], "network": "udp", "outboundTag": "block"})
     if email != "direct":
         key = "balancerTag" if target == "warp-pool" else "outboundTag"
@@ -116,13 +119,25 @@ xray = {
                    "statsOutboundUplink": True, "statsOutboundDownlink": True},
     },
     "inbounds": [{
-        "tag": "vless-reality", "listen": "0.0.0.0", "port": 443, "protocol": "vless",
+        # Behind an SNI router (see /root/caddy/edge): XRAY_LISTEN=127.0.0.1, XRAY_PORT=4443, XRAY_ACCEPT_PROXY=1.
+        # Client links always use port 443.
+        "tag": "vless-reality", "listen": env.get("XRAY_LISTEN") or "0.0.0.0",
+        "port": int(env.get("XRAY_PORT") or 443), "protocol": "vless",
         "settings": {"clients": [{"id": u, "email": e, "flow": "xtls-rprx-vision"} for e, u, _, _ in users],
                      "decryption": "none"},
-        "streamSettings": {"network": "tcp", "security": "reality", "realitySettings": {
-            "target": f"{env['REALITY_TARGET']}:443", "serverNames": [env["REALITY_TARGET"]],
+        "streamSettings": {"network": "tcp", "security": "reality",
+                           "sockopt": {"acceptProxyProtocol": env.get("XRAY_ACCEPT_PROXY") == "1"},
+                           "realitySettings": {
+            # REALITY_DEST: where non-VPN visitors go (default: the real site itself).
+            # Set it to the local Caddy (127.0.0.1:8443) to serve your own websites on 443;
+            # REALITY_XVER=1 then passes the visitor's real IP to Caddy (PROXY protocol).
+            "target": env.get("REALITY_DEST") or f"{env['REALITY_TARGET']}:443",
+            "xver": int(env.get("REALITY_XVER") or 0),
+            "serverNames": [env["REALITY_TARGET"]],
             "privateKey": env["REALITY_PRIVATE_KEY"], "shortIds": [env["REALITY_SHORT_ID"]]}},
-        "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"], "routeOnly": True},
+        # routeOnly False: replace the IP the app dialed with the sniffed hostname. Lantern can only
+        # dial hostnames, and exits then resolve names themselves (better CDN routing per exit).
+        "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"], "routeOnly": False},
     }],
     "outbounds": outbounds,
     "routing": {"domainStrategy": "AsIs", "rules": rules},

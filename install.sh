@@ -18,7 +18,7 @@ if [ -f images.tar.gz ]; then
   echo "== loading images"
   gunzip -c images.tar.gz | docker load
 fi
-docker image inspect local/vpn-monitor:1 >/dev/null 2>&1 || docker compose --profile lantern build
+docker image inspect local/vpn-monitor:1 >/dev/null 2>&1 || { docker compose build xray && docker compose --profile lantern build; }
 
 # Anything still holding our ports (an older install) must go first.
 for u in gost xray hysteria psiphon psiphon-health.timer; do
